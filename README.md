@@ -1,111 +1,218 @@
-# PrathitPatel_VSD_TAPEOUT_Week_5
-# Week 5 - OpenROAD Flow Setup and Floorplan + Placement
 
-This document explain the setting up the OpenROAD Flow Scripts environment and execute the Floorplan and Placement stages of the physical design flow.
+# 🧩 **From RTL to Placement using OpenROAD Flow**
 
------
+The OpenROAD project makes it possible to perform a **complete digital backend flow** using open-source tools and process design kits.
+This documentation walks through the setup and execution of the **OpenROAD Flow** on the `gcd` (Greatest Common Divisor) design — beginning from the **Register Transfer Level (RTL)** and proceeding up to **placement**, along with methods to view and verify the layout results.
 
-## 📚 Contents
+---
 
-  - [Steps for Week 5 Task (Floorplan & Placement)](#steps-for-week-5-task-floorplan--placement)
-      - [1. Clone the OpenROAD Flow Scripts Repository](#1-clone-the-openroad-flow-scripts-repository)
-      - [2. Setup, Build and Verifying OpenROAD](#2-setup-build-and-verifying-openroad)
-      - [3. Run the Flow to the **Floorplan** Stage](#3-run-the-flow-to-the-floorplan-stage)
-      - [4. Visualize the Floorplan (Deliverable 1)](#4-visualize-the-floorplan-deliverable-1)
-      - [5. Run the Flow to the **Placement** Stage](#5-run-the-flow-to-the-placement-stage)
-      - [6. Visualize the Placement (Deliverable 2)](#6-visualize-the-placement-deliverable-2)
+## 🌐 1. The Journey from Code to Silicon
 
------
+Every integrated circuit begins as logic — equations, modules, and connections written in a hardware description language such as **Verilog**.
+The **physical design flow** translates that abstract logic into a **real, placeable structure** made up of transistors and wires.
 
-## Steps for Week 5 Task (Floorplan & Placement)
+In our case, the process includes:
 
+* Converting Verilog into a gate-level netlist (synthesis)
+* Mapping logic into silicon space (floorplanning)
+* Physically arranging standard cells (placement)
 
-### 1\. Clone the OpenROAD Flow Scripts Repository
+At the end of this journey, you don’t just have a design — you have a **visual blueprint** that could be fabricated on a wafer.
 
-This is the main repository for the flow. The `--recursive` flag is crucial because the OpenROAD-flow-scripts repository uses Git submodules.
+---
+
+## 🧱 2. Setting up the OpenROAD Environment
+
+### Cloning the Repository
+
+The OpenROAD flow scripts bring together all the required build configurations and design examples.
+Clone the entire project, including its submodules:
 
 ```bash
-git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts
+git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git
 cd OpenROAD-flow-scripts
 ```
 
-<img width="1920" height="983" alt="Screenshot from 2025-10-21 12-58-02" src="https://github.com/user-attachments/assets/5758727e-cfa0-4951-97a8-b41e36a42b53" />
+### Installing Dependencies
 
-### 2\. Setup, Build and Verifying OpenROAD
-
-Run the following commands in order from your `OpenROAD-flow-scripts` directory. This single sequence will install dependencies, compile the tools, and verify that they are working.
+To make sure all necessary libraries and compilers are present, run the dependency installer script with the `-all` option:
 
 ```bash
-# 1. Install system-wide dependencies
-sudo ./setup.sh
-
-# 2. Compile OpenROAD and its tools
-./build_openroad.sh --local
-
-# 3. Load the new tool paths into your terminal
-source ./env.sh
-
-# 4. Verify the tools are working
-yosys -help
-openroad -help
+sudo ./etc/DependencyInstaller.sh -all
 ```
-<img width="1920" height="983" alt="Screenshot from 2025-10-21 19-36-12" src="https://github.com/user-attachments/assets/abfcaa0e-2dd3-46ca-a113-6bc178af519a" />
 
-<img width="1920" height="983" alt="Screenshot from 2025-10-21 19-17-49" src="https://github.com/user-attachments/assets/4dafa9ff-69a7-4eb1-8e17-9a300115eac9" />
+This will pull and build everything required — from Boost and Eigen to Tcl and Python bindings.
+The process is lengthy, but it ensures the environment is consistent and future build steps will succeed.
 
-  * `sudo ./setup.sh`: This command runs the setup script with **administrator (`sudo`) privileges**. It reads a list of required libraries and tools (like `build-essential`, `python3-dev`, `libboost-all-dev`, etc.) and installs them onto the Linux system using package manager (like `apt`). These are the necessary prerequisites for compiling and running OpenROAD.
+### Building OpenROAD
 
-  * `./build_openroad.sh --local`: This is the main compilation command. It executes a script that builds the OpenROAD application (and its bundled tools like Yosys) from the source code cloned. The `--local` flag tells the script to build the tools inside the current project directory (under `OpenROAD-flow-scripts/tools/`) rather than trying to install them system-wide.
+After dependencies are set up, compile the OpenROAD toolchain locally:
 
-  * `source ./env.sh`: This command is crucial for **setting up the environment**. It executes the `env.sh` script in the *current* terminal session, which "exports" environment variables (like the `PATH`) to tell the shell where to find the new `openroad` and `yosys` executables. 
+```bash
+./build_openroad.sh --local
+```
 
-  * `yosys -help` & `openroad -help`: These are **verification commands**. By asking for the `--help` menu, we can test two things:
+Once this completes, you’ll have a fully operational OpenROAD executable inside your environment.
 
-    1.  That the `PATH` was set correctly.
-    2.  That the binaries were compiled successfully and are executable.
+<img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/dd195657-e577-47aa-bc13-0dfc0131f666" />
 
-If we can see the help text print out for both, then the installation is successful.
-    
-### 4\. Run the Flow to the **Floorplan** Stage
+---
 
-Now, navigate into the `flow` directory and run the `make` command to stop at the floorplan stage. This will use the default `gcd` design.
+## ⚠️ 3. Common Installation Issues & Their Fixes
+
+Several library-related issues may arise during the build process. Below are the major ones and how they were resolved:
+
+| Error                                                          | Cause                         | Fix                                                                                     |
+| :------------------------------------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------- |
+| `Could NOT find GTest`                                         | Google Test library missing   | `sudo apt-get install libgtest-dev`                                                     |
+| `Could not find package configuration file provided by spdlog` | Logging library not installed | `sudo apt-get install libspdlog-dev`                                                    |
+| `yaml-cpp`, `or-tools`, or similar                             | Unavailable headers/libraries | Rerun `sudo ./etc/DependencyInstaller.sh -all` or manually install all build essentials |
+
+A complete manual installation (if the script fails) can also be done using:
+
+```bash
+sudo apt install build-essential cmake python3-pip clang flex bison libboost-all-dev libeigen3-dev swig
+```
+
+---
+
+## 🧠 4. Executing the Flow
+
+With everything built and configured, the next step is to **run the flow** for our design.
+
+### Launching the Flow up to Placement
+
+Inside the flow directory, execute:
 
 ```bash
 cd flow
-make floorplan
+make DESIGN_CONFIG=./designs/sky130hd/gcd/config.mk place
 ```
 
-**Deliverable:** Take a screenshot of your terminal after this command finishes. This is your **"Floorplan completion log"**.
+This single command will:
 
-### 5\. Visualize the Floorplan (Deliverable 1)
+1. Perform logic synthesis
+2. Define the chip outline (floorplanning)
+3. Place standard cells based on timing and connectivity
 
-Run the following command to open the floorplan layout in the OpenROAD GUI.
+The process stops automatically before clock tree synthesis, as per the target stage (`place`).
+
+After completion, layout files will be available in:
+
+```
+results/sky130hd/gcd/base/
+```
+<img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/6c724bd0-33ae-4146-8dbb-2c05695d6e44" />
+
+---
+
+## 🖥️ 5. Visualizing the Physical Layout
+
+The results of the OpenROAD flow can be explored using two visualization tools — **OpenROAD GUI** and **KLayout**.
+Before either is used, the environment variables must be set up properly:
 
 ```bash
-make gui_floorplan
+cd ~/OpenROAD-flow-scripts
+source ./env.sh
 ```
 
-**Deliverable:** Take a screenshot of the GUI window showing the core area and I/O pins. This is your **"Floorplan view"** image.
+### Method 1: OpenROAD GUI
 
-### 6\. Run the Flow to the **Placement** Stage
-
-This command will continue from the floorplan and run the standard cell placement.
+The GUI allows interactive viewing of design data (.odb files).
+To open the design:
 
 ```bash
-make placement
+cd flow
+openroad -gui
 ```
 
-**Deliverable:** Take a screenshot of your terminal after this command finishes. This is your **"Placement completion log"**.
+<img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/d7db8472-ddfd-4440-86d2-e231e466ca80" />
 
-### 7\. Visualize the Placement (Deliverable 2)
+Then, through the GUI:
 
-Finally, run this command to open the placement layout in the GUI.
+* Navigate to `File → Open`
+* Load `results/sky130hd/gcd/base/2_floorplan.odb` for the floorplan view
+
+  <img width="1280" height="800" alt="Image" src="https://github.com/user-attachments/assets/0eeb9cba-c7b2-481f-87f8-0c4f37819417" />
+  <img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/7236ff90-000a-48fb-9794-a49170e77a92" />
+
+* Similarly, open `3_place.odb` for the placement visualization
+You can explore the die area, cell rows, and standard cell placements within the window.
+  
+ <img width="1213" height="770" alt="Image" src="https://github.com/user-attachments/assets/8419dfbe-3b00-40c0-81ce-9995a7dc6b80" />
+ <img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/de91de38-b064-48fb-b2fb-b1aa492fc567" />
+
+---
+
+### Method 2: Viewing through KLayout
+
+KLayout works with `.def` format files. Since OpenROAD produces `.odb` outputs, they need conversion.
+
+#### Converting ODB to DEF
+
+```tcl
+openroad
+read_lef platforms/sky130hd/lef/sky130_fd_sc_hd.tlef
+read_lef platforms/sky130hd/lef/sky130_fd_sc_hd_merged.lef
+read_db results/sky130hd/gcd/base/2_floorplan.odb
+write_def results/sky130hd/gcd/base/2_floorplan.def
+read_db results/sky130hd/gcd/base/3_place.odb
+write_def results/sky130hd/gcd/base/3_place.def
+exit
+```
+#### Verify files are generated
 
 ```bash
-make gui_placement
+ls -lh results/sky130hd/gcd/base/2_floorplan.def results/sky130hd/gcd/base/3_place.def
 ```
 
-**Deliverable:** Zoom in to see the standard cells arranged in rows. Take a screenshot. This is your **"Placement layout"** image.
+<img width="1213" height="79" alt="Image" src="https://github.com/user-attachments/assets/15ac5e97-a994-409c-a665-2d011afe688d" />
 
-✅ **Week 5 Deliverables Complete\!** You now have all the required logs and layout images for your submission.
+#### Opening in KLayout
+
+```bash
+klayout -l platforms/sky130hd/lef/sky130_fd_sc_hd.tlef -l platforms/sky130hd/lef/sky130_fd_sc_hd_merged.lef results/sky130hd/gcd/base/2_floorplan.def
+```
+This view provides a lightweight alternative to the GUI, excellent for verifying placement alignment and macro geometry.
+
+<img width="1210" height="773" alt="Image" src="https://github.com/user-attachments/assets/da18407c-904c-460c-894c-9256582ffd17" />
+
+---
+
+## 📊 6. Notes and Tips
+
+* Always source `env.sh` when launching a new terminal.
+* For missing macros or warnings in KLayout, ensure both `.tlef` and `.lef` files are loaded.
+* The `results` folder will contain `.odb`, `.def`, and intermediate report files for analysis.
+
+---
+
+## 🔍 7. Results Snapshot
+
+| Stage         | File Type      | Description                             |
+| :------------ | :------------- | :-------------------------------------- |
+| Floorplanning | `.odb`, `.def` | Defines die area and block placements   |
+| Placement     | `.odb`, `.def` | All standard cells placed and legalized |
+| Visualization | `.lef`, `.def` | Used for GUI and KLayout inspection     |
+
+---
+
+## 🎯 8. Final Thoughts
+
+Through this exercise, you completed a **partial OpenROAD physical design flow** — transitioning a design from **RTL to its physical placement** using open-source infrastructure.
+
+This step forms the **foundation of modern chip implementation**, bridging digital logic and real-world geometry.
+Each step — synthesis, floorplanning, placement — brings the circuit closer to becoming a tangible silicon design.
+
+By mastering this open-source workflow, you’ve effectively experienced the **first milestone of backend VLSI design automation**.
+
+---
+
+## 🧾 Summary
+
+* Installed and built OpenROAD-flow-scripts
+* Resolved dependency issues
+* Ran the `gcd` design flow up to placement
+* Visualized results in both GUI and KLayout
+* Validated the structure and layout geometry successfully
 
